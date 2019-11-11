@@ -6,6 +6,7 @@ import (
 	"strings"
 )
 
+// Return the life value of a neighbour
 func getNeighbourLifeValue(world [][]byte, x int, y int) byte {
 	worldHeight := cap(world)
 	worldWidth := cap(world[0])
@@ -28,52 +29,39 @@ func getNeighbourLifeValue(world [][]byte, x int, y int) byte {
 	} else {
 		wrappedY = y
 	}
-	
+
 	return world[wrappedY][wrappedX]
 }
 
+// Return a number of living neighbours for a given x,y coordinate
 func getNumLiveNeighbours(world [][]byte, x int, y int) int {
 	numLiveNeighbours := 0
 
-		// Check verticals
-	if (getNeighbourLifeValue(world, x, (y - 1)) != 0) {
-		numLiveNeighbours++
+	neighbourOffsets := [][]int{
+	  {-1, -1},
+	  {-1, 0},
+	  {-1, 1},
+	  {0, -1},
+	  {0, 1},
+	  {1, -1},
+	  {1, 0},
+	  {1, 1},
 	}
 
-	if (getNeighbourLifeValue(world, x, (y + 1)) != 0) {
-		numLiveNeighbours++
-	}
-
-	// Check horizontals
-	if (getNeighbourLifeValue(world, (x - 1), y) != 0) {
-		numLiveNeighbours++
-	}
-
-	if (getNeighbourLifeValue(world, (x + 1), y) != 0) {
-		numLiveNeighbours++
-	}
-
-	// Check diagonals
-	if (getNeighbourLifeValue(world, (x - 1), (y - 1)) != 0) {
-		numLiveNeighbours++
-	}
-
-	if (getNeighbourLifeValue(world, (x + 1), (y - 1)) != 0) {
-		numLiveNeighbours++
-	}
-
-	if (getNeighbourLifeValue(world, (x - 1), (y + 1)) != 0) {
-		numLiveNeighbours++
-	}
-
-	if (getNeighbourLifeValue(world, (x + 1), (y + 1)) != 0) {
-		numLiveNeighbours++
+	for i := range neighbourOffsets {
+		offsettedX := x + neighbourOffsets[i][0]
+		offsettedY := y + neighbourOffsets[i][1]
+		
+		if (getNeighbourLifeValue(world, offsettedX, offsettedY) != 0) {
+			numLiveNeighbours++
+		}
 	}
 
 	return numLiveNeighbours
 }
 
-func getLifeValue(world [][]byte, x int, y int) byte {
+// Return a new life value for a given world and coordinates
+func getNewLifeValue(world [][]byte, x int, y int) byte {
 	initialLifeValue := world[y][x]
 
 	numLiveNeighbours := getNumLiveNeighbours(world, x, y)
@@ -97,6 +85,7 @@ func getLifeValue(world [][]byte, x int, y int) byte {
 	}
 }
 
+// Return a new world slice with a given size
 func createNewWorld(width int, height int) [][]byte {
 	// Create the 2D slice to store the world.
 	world := make([][]byte, height)
@@ -134,7 +123,7 @@ func distributor(p golParams, d distributorChans, alive chan []cell) {
 
 		for y := 0; y < p.imageHeight; y++ {
 			for x := 0; x < p.imageWidth; x++ {
-				newWorld[y][x] = getLifeValue(world, x, y)
+				newWorld[y][x] = getNewLifeValue(world, x, y)
 			}
 		}
 
