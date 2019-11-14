@@ -1,10 +1,17 @@
 package main
 
 import (
-	"fmt"
+//	"fmt"
 	"strconv"
 	"strings"
+	"sync"
+	"github.com/ChrisGora/semaphore"
 )
+
+type segment struct {
+	startY	int
+	endY		int
+}
 
 // Return the life value of a neighbour
 func getNeighbourLifeValue(world [][]byte, x int, y int) byte {
@@ -96,6 +103,22 @@ func createNewWorld(width int, height int) [][]byte {
 	return world
 }
 
+// Return an array of world segments
+func splitWorldIntoSegments(p golParams) []segment {
+	segments := make([]segment, p.threads)
+
+	heightOfASegment := p.imageHeight / p.threads
+
+	for i := range segments {
+		segments[i] = segment{
+			startY: (i * heightOfASegment),
+			endY:		(i * heightOfASegment) + heightOfASegment,
+		}
+	}
+
+	return segments
+}
+
 // distributor divides the work between workers and interacts with other goroutines.
 func distributor(p golParams, d distributorChans, alive chan []cell) {
 
@@ -106,16 +129,50 @@ func distributor(p golParams, d distributorChans, alive chan []cell) {
 	d.io.command <- ioInput
 	d.io.filename <- strings.Join([]string{strconv.Itoa(p.imageWidth), strconv.Itoa(p.imageHeight)}, "x")
 
+	// Create array to hold slice
+	var aliveCells []cell
+
 	// The io goroutine sends the requested image byte by byte, in rows.
 	for y := 0; y < p.imageHeight; y++ {
 		for x := 0; x < p.imageWidth; x++ {
 			val := <-d.io.inputVal
 			if val != 0 {
-				fmt.Println("Alive cell at", x, y)
+				//fmt.Println("Alive cell at", x, y)
 				world[y][x] = val
+
+				aliveCells = append(aliveCells, cell{x: x, y: y})
 			}
 		}
 	}
+
+	// Create the individual worker segments
+	segments := splitWorldIntoSegments(p)
+
+	// Initialise work buffer and response buffer
+	buffer := newBuffer(p.threads)
+	mutex := &sync.Mutex{}
+
+	spaceAvailable := semaphore.Init(1, 1)
+	workAvailable := semaphore.Init(1, 0)
+
+	resBuffer := newBuffer(p.threads)
+	resMutex := &sync.Mutex{}
+
+	resSpaceAvailable := semaphore.Init(1, 1)
+	resWorkAvailable := semaphore.Init(1, 0)
+
+	// Test: Add worker data to buffer
+	for i := range segments {
+		spaceAvailable.Wait()
+		mutex.Lock()
+		
+		buffer.put(workerData{s: segments[i], aliveCells: aliveCells, params: p})
+		
+		mutex.Unlock()
+		workAvailable.Post()
+	}
+
+	go golWorker(&buffer, spaceAvailable, workAvailable, mutex, &resBuffer, resSpaceAvailable, resWorkAvailable, resMutex)
 
 	// Calculate the new state of Game of Life after the given number of turns.
 	for turns := 0; turns < p.turns; turns++ {
