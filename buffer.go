@@ -1,5 +1,9 @@
 package main
 
+import (
+"fmt"
+)
+
 type workerData struct {
   s          segment
   aliveCells []cell
@@ -22,7 +26,7 @@ func newBuffer(size int) buffer {
 
 func (buffer *buffer) get() workerData {
   wData := buffer.b[buffer.read]
-  //fmt.Println("Get\t", wData, "\t", buffer)
+  fmt.Println("Get\t", wData, "\t", buffer)
   buffer.read = (buffer.read + 1) % len(buffer.b)
   return wData
 }
@@ -30,5 +34,6 @@ func (buffer *buffer) get() workerData {
 func (buffer *buffer) put(wData workerData) {
   buffer.b[buffer.write] = wData
   //fmt.Println("Put\t", wData, "\t", buffer)
+  fmt.Println("Put\t", wData)
   buffer.write = (buffer.write + 1) % len(buffer.b)
 }

@@ -1,5 +1,5 @@
 package main
-
+//
 import "flag"
 
 // golParams provides the details of how to run the Game of Life and which image to load.
@@ -117,7 +117,7 @@ func main() {
 
 	flag.Parse()
 
-	params.turns = 10000000000
+	params.turns = 1
 
 	startControlServer(params)
 	go getKeyboardCommand(nil)
