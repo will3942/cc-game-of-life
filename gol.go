@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"sync"
-	"github.com/ChrisGora/semaphore"
+	//"sync"
+	//"github.com/ChrisGora/semaphore"
 )
 
 type segment struct {
@@ -158,51 +158,59 @@ func distributor(p golParams, d distributorChans, alive chan []cell) {
 	// Create the individual worker segments
 	segments := splitWorldIntoSegments(p)
 
-	// Initialise work buffer and response buffer
-	buffer := newBuffer(p.threads)
-	mutex := &sync.Mutex{}
-
-	spaceAvailable := semaphore.Init(p.threads, p.threads)
-	workAvailable := semaphore.Init(p.threads, 0)
-
-	resBuffer := newBuffer(p.threads)
-	resMutex := &sync.Mutex{}
-
-	resSpaceAvailable := semaphore.Init(p.threads, p.threads)
-	resWorkAvailable := semaphore.Init(p.threads, 0)
+	workBufferParams := newBufferParams(p.threads)
+	resBufferParams := newBufferParams(p.threads)
 
 	// Calculate the new state of Game of Life after the given number of turns.
 	for turns := 0; turns < p.turns; turns++ {
+		fmt.Println("turns = ", turns)
 		// Add worker data to buffer
 		for i := range segments {
-			fmt.Println(segments)
-			spaceAvailable.Wait()
-			mutex.Lock()
-			fmt.Println("put", i)
-			buffer.put(workerData{s: segments[i], aliveCells: aliveCells, params: p})
-			fmt.Println("print ", i)
-			mutex.Unlock()
-			workAvailable.Post()
+			//fmt.Println(segments)
+			workBufferParams.spaceAvailable.Wait()
+			workBufferParams.mutex.Lock()
+		
+			workBufferParams.buffer.put(workerData{s: segments[i], aliveCells: aliveCells, params: p})
+			
+			workBufferParams.mutex.Unlock()
+			workBufferParams.workAvailable.Post()
 
-			fmt.Println("distributor - golworker ", i)
-			go golWorker(&buffer, spaceAvailable, workAvailable, mutex, &resBuffer, resSpaceAvailable, resWorkAvailable, resMutex)
+			fmt.Println(segments[i])
+
+			go golWorker(workBufferParams, resBufferParams)
 		}
 
+		newWorld := createNewWorld(p.imageWidth, p.imageHeight)
+	
 		for i := range segments {
-			fmt.Println("distributor ", i)
-    	// Obtain newWorld
-    	resWorkAvailable.Wait()
-    	resMutex.Lock()
+	    	// Obtain newWorld
+	    	resBufferParams.workAvailable.Wait()
+	    	resBufferParams.mutex.Lock()
 
-    	resData := resBuffer.get()
+	    	resData := resBufferParams.buffer.get()
 
-    	fmt.Println(resData)
+	    	newWorld = removeDeadCells(newWorld, aliveCells,resData.aliveCells, segments[i])
+	    	newWorld = populateWorldWithAliveCells(newWorld, resData.aliveCells)
+	   
 
-    	resMutex.Unlock()
-    	resSpaceAvailable.Post()
+
+	    	fmt.Println("i = ", i)
+	    	fmt.Println("res data \t",resData.aliveCells)
+
+	    	resBufferParams.mutex.Unlock()
+	    	resBufferParams.spaceAvailable.Post()
 		}
 
-		world = world
+		world = newWorld
+		var newAliveCells []cell
+		for y := 0; y < p.imageHeight; y++ {
+			for x := 0; x < p.imageWidth; x++ {
+				if world[y][x] != 0 {
+					newAliveCells = append(newAliveCells, cell{x: x, y: y})
+				}
+			}
+		}
+		aliveCells = newAliveCells
 	}
 
 	// Create an empty slice to store coordinates of cells that are still alive after p.turns are done.
@@ -215,6 +223,7 @@ func distributor(p golParams, d distributorChans, alive chan []cell) {
 			}
 		}
 	}
+	fmt.Println(finalAlive)
 
 	// Make sure that the Io has finished any output before exiting.
 	d.io.command <- ioCheckIdle
