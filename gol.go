@@ -167,7 +167,6 @@ func getFinalAlive(p golParams, world [][]byte) []cell{
 
 // distributor divides the work between workers and interacts with other goroutines.
 func distributor(p golParams, d distributorChans, alive chan []cell) {
-
 	// Create the 2D slice to store the world.
 	world := createNewWorld(p.imageWidth, p.imageHeight)
 
@@ -214,7 +213,6 @@ func distributor(p golParams, d distributorChans, alive chan []cell) {
 
 	finalAlive := getFinalAlive(p, world)
 	
-
 	// Make sure that the Io has finished any output before exiting.
 	d.io.command <- ioCheckIdle
 	<-d.io.idle
