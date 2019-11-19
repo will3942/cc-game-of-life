@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fmt"
+	//"fmt"
 	"strconv"
 	"strings"
 	//"sync"
@@ -99,7 +99,6 @@ func createNewWorld(width int, height int) [][]byte {
 	for i := range world {
 		world[i] = make([]byte, width)
 	}
-
 	return world
 }
 
@@ -110,14 +109,60 @@ func splitWorldIntoSegments(p golParams) []segment {
 	heightOfASegment := p.imageHeight / p.threads
 
 	for i := range segments {
-//		fmt.Println("segment ", i, ": startY = ", (i * heightOfASegment), ", endY = ", (i * heightOfASegment) + heightOfASegment)
 		segments[i] = segment{
 			startY: (i * heightOfASegment),
 			endY:		(i * heightOfASegment) + heightOfASegment,
 		}
 	}
-
 	return segments
+}
+
+//calculate new state of all segments using buffers and return new world.
+//HAS TOO MANY ARGUMENTS?
+func calculateNewState(p golParams, workBufferParams bufferParams, resBufferParams bufferParams, segments []segment, aliveCells []cell) [][]byte{
+	// Add worker data to buffer
+	for i := range segments {
+		workBufferParams.spaceAvailable.Wait()
+		workBufferParams.mutex.Lock()
+	
+		workBufferParams.buffer.put(workerData{s: segments[i], aliveCells: aliveCells, params: p})
+		
+		workBufferParams.mutex.Unlock()
+		workBufferParams.workAvailable.Post()
+
+		go golWorker(workBufferParams, resBufferParams)
+	}
+
+	newWorld := createNewWorld(p.imageWidth, p.imageHeight)
+
+	for i := 0; i < len(segments); i++ {
+	// Obtain newWorld
+	resBufferParams.workAvailable.Wait()
+	resBufferParams.mutex.Lock()
+
+	resData := resBufferParams.buffer.get()
+
+	newWorld = populateWorldWithAliveCells(newWorld, resData.aliveCells)
+
+	resBufferParams.mutex.Unlock()
+	resBufferParams.spaceAvailable.Post()
+	}
+
+	return newWorld
+}
+
+//Return final cells alive.
+func getFinalAlive(p golParams, world [][]byte) []cell{
+	var finalAlive []cell
+	// Go through the world and append the cells that are still alive.
+	for y := 0; y < p.imageHeight; y++ {
+		for x := 0; x < p.imageWidth; x++ {
+			if world[y][x] != 0 {
+				finalAlive = append(finalAlive, cell{x: x, y: y})
+			}
+		}
+	}
+	return finalAlive
 }
 
 // distributor divides the work between workers and interacts with other goroutines.
@@ -138,9 +183,7 @@ func distributor(p golParams, d distributorChans, alive chan []cell) {
 		for x := 0; x < p.imageWidth; x++ {
 			val := <-d.io.inputVal
 			if val != 0 {
-				//fmt.Println("Alive cell at", x, y)
 				world[y][x] = val
-
 				aliveCells = append(aliveCells, cell{x: x, y: y})
 			}
 		}
@@ -154,42 +197,7 @@ func distributor(p golParams, d distributorChans, alive chan []cell) {
 
 	// Calculate the new state of Game of Life after the given number of turns.
 	for turns := 0; turns < p.turns; turns++ {
-//		fmt.Println("turns = ", turns)
-		// Add worker data to buffer
-		for i := range segments {
-			//fmt.Println(segments)
-			workBufferParams.spaceAvailable.Wait()
-			workBufferParams.mutex.Lock()
-		
-			workBufferParams.buffer.put(workerData{s: segments[i], aliveCells: aliveCells, params: p})
-			
-			workBufferParams.mutex.Unlock()
-			workBufferParams.workAvailable.Post()
-
-//			fmt.Println(segments[i])
-
-			go golWorker(workBufferParams, resBufferParams)
-		}
-
-		newWorld := createNewWorld(p.imageWidth, p.imageHeight)
-	
-		for i := 0; i < len(segments); i++ {
-    	// Obtain newWorld
-    	resBufferParams.workAvailable.Wait()
-    	resBufferParams.mutex.Lock()
-
-    	resData := resBufferParams.buffer.get()
-
-    	//newWorld = removeDeadCells(newWorld, aliveCells,resData.aliveCells, segments[i])
-    	newWorld = populateWorldWithAliveCells(newWorld, resData.aliveCells)
-
-//    	fmt.Println("i = ", i)
-//    	fmt.Println("res data \t",resData.aliveCells)
-
-    	resBufferParams.mutex.Unlock()
-    	resBufferParams.spaceAvailable.Post()
-		}
-
+		newWorld := calculateNewState(p, workBufferParams, resBufferParams, segments, aliveCells)
 		world = newWorld
 
 		var newAliveCells []cell
@@ -201,22 +209,11 @@ func distributor(p golParams, d distributorChans, alive chan []cell) {
 			}
 		}
 
-//		fmt.Println("newAliveCells = ", newAliveCells);
-
 		aliveCells = newAliveCells
 	}
 
-	// Create an empty slice to store coordinates of cells that are still alive after p.turns are done.
-	var finalAlive []cell
-	// Go through the world and append the cells that are still alive.
-	for y := 0; y < p.imageHeight; y++ {
-		for x := 0; x < p.imageWidth; x++ {
-			if world[y][x] != 0 {
-				finalAlive = append(finalAlive, cell{x: x, y: y})
-			}
-		}
-	}
-	fmt.Println(finalAlive)
+	finalAlive := getFinalAlive(p, world)
+	
 
 	// Make sure that the Io has finished any output before exiting.
 	d.io.command <- ioCheckIdle
