@@ -168,6 +168,9 @@ func getFinalAlive(p golParams, world [][]byte) []cell{
 
 // distributor divides the work between workers and interacts with other goroutines.
 func distributor(p golParams, d distributorChans, alive chan []cell) {
+	// Variable to decide whether to output an image at the end
+	outputAtEnd := false
+
 	// Create the 2D slice to store the world.
 	world := createNewWorld(p.imageWidth, p.imageHeight)
 
@@ -215,9 +218,18 @@ func distributor(p golParams, d distributorChans, alive chan []cell) {
 		select {
     	case keyPress := <-d.keyChan:
         handleKeyPress(p, d, keyPress, turns, world)
+
+        if (keyPress == 113) {
+        	// q pressed
+        	outputAtEnd = true
+        }
     	default:
         // Receiving would block if no key press occurred
     }
+	}
+
+	if (outputAtEnd) {
+		writeOutputImage(p, d, world)
 	}
 
 	finalAlive := getFinalAlive(p, world)

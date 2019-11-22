@@ -64,18 +64,11 @@ func handleKeyPress(p golParams, d distributorChans, keyPressed rune, currentTur
 	case 113:
 		// q pressed: output a pgm file and then quit program
 		fmt.Println("q pressed");
-
-		writeOutputImage(p, d, world)
-		
-		StopControlServer()
-		os.Exit(0)
 	case 115:
 		// s pressed: output a pgm file
 		fmt.Println("s pressed");
 
 		writeOutputImage(p, d, world)
-
-		fmt.Println("abcd")
 	default:
 	}
 } 
