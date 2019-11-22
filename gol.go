@@ -1,7 +1,7 @@
 package main
 
 import (
-	//"fmt"
+//	"fmt"
 	"strconv"
 	"strings"
 	//"sync"
@@ -114,6 +114,7 @@ func splitWorldIntoSegments(p golParams) []segment {
 			endY:		(i * heightOfASegment) + heightOfASegment,
 		}
 	}
+
 	return segments
 }
 
@@ -209,6 +210,14 @@ func distributor(p golParams, d distributorChans, alive chan []cell) {
 		}
 
 		aliveCells = newAliveCells
+		
+
+		select {
+    	case keyPress := <-d.keyChan:
+        handleKeyPress(p, d, keyPress, turns, world)
+    	default:
+        // Receiving would block if no key press occurred
+    }
 	}
 
 	finalAlive := getFinalAlive(p, world)
