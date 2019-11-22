@@ -39,39 +39,37 @@ func populateWorldWithAliveCells(world [][]byte, aliveCells []cell) [][]byte {
 
 
 func golWorker(workBufferParams bufferParams, responseBufferParams bufferParams) {
-  for {
-    // Obtain work
-    workBufferParams.workAvailable.Wait()
-    workBufferParams.mutex.Lock()
+  // Obtain work
+  workBufferParams.workAvailable.Wait()
+  workBufferParams.mutex.Lock()
 
-    wData := workBufferParams.buffer.get()
+  wData := workBufferParams.buffer.get()
 
-    // Generate new world based on worker data
-    world := createNewWorld(wData.params.imageWidth, wData.params.imageHeight)
-    
-    world = populateWorldWithAliveCells(world, wData.aliveCells)
+  // Generate new world based on worker data
+  world := createNewWorld(wData.params.imageWidth, wData.params.imageHeight)
+  
+  world = populateWorldWithAliveCells(world, wData.aliveCells)
 
-    newWorld := createNewWorld(wData.params.imageWidth, wData.params.imageHeight)
-    var newAliveCells []cell
+  newWorld := createNewWorld(wData.params.imageWidth, wData.params.imageHeight)
+  var newAliveCells []cell
 
-    for y := wData.s.startY; y < wData.s.endY; y++ {
-      for x := 0; x < wData.params.imageWidth; x++ {
-        newWorld[y][x] = getNewLifeValue(world, x, y)
-        if (newWorld[y][x] != 0) {
-          newAliveCells = append(newAliveCells, cell{x: x, y: y})
-        }
+  for y := wData.s.startY; y < wData.s.endY; y++ {
+    for x := 0; x < wData.params.imageWidth; x++ {
+      newWorld[y][x] = getNewLifeValue(world, x, y)
+      if (newWorld[y][x] != 0) {
+        newAliveCells = append(newAliveCells, cell{x: x, y: y})
       }
     }
-
-    // Add to response buffer
-    responseBufferParams.spaceAvailable.Wait()
-    responseBufferParams.mutex.Lock()
-    responseBufferParams.buffer.put(workerData{s: wData.s, aliveCells: newAliveCells, params: wData.params})
-    responseBufferParams.mutex.Unlock()
-    responseBufferParams.workAvailable.Post()
-
-    // Release worker to obtain more work
-    workBufferParams.mutex.Unlock()
-    workBufferParams.spaceAvailable.Post()
   }
+
+  // Add to response buffer
+  responseBufferParams.spaceAvailable.Wait()
+  responseBufferParams.mutex.Lock()
+  responseBufferParams.buffer.put(workerData{s: wData.s, aliveCells: newAliveCells, params: wData.params})
+  responseBufferParams.mutex.Unlock()
+  responseBufferParams.workAvailable.Post()
+
+  // Release worker to obtain more work
+  workBufferParams.mutex.Unlock()
+  workBufferParams.spaceAvailable.Post()
 }
