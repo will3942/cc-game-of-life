@@ -74,6 +74,8 @@ func handleKeyPress(p golParams, d distributorChans, keyPressed rune, currentTur
 		fmt.Println("s pressed");
 
 		writeOutputImage(p, d, world)
+
+		fmt.Println("abcd")
 	default:
 	}
 } 
