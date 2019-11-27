@@ -30,10 +30,10 @@ func getKeyboardCommand(key chan<- rune) {
 }
 
 // writeOutputImage writes an output pgm file by coverting the world to a series of bytes and sending this on the output IO chan
-func writeOutputImage(p golParams, d distributorChans, world [][]byte) {
+func writeOutputImage(p golParams, d distributorChans, currentTurn int, world [][]byte) {
 	// Request the io goroutine to write out the image with the given filename.
 	d.io.command <- ioOutput
-	d.io.filename <- strings.Join([]string{strconv.Itoa(p.imageWidth), strconv.Itoa(p.imageHeight)}, "x")
+	d.io.filename <- strings.Join([]string{strconv.Itoa(p.imageWidth), strconv.Itoa(p.imageHeight), strconv.Itoa(currentTurn)}, "x")
 
 	for y := range world {
 		for _, b := range world[y] {
@@ -64,11 +64,16 @@ func handleKeyPress(p golParams, d distributorChans, keyPressed rune, currentTur
 	case 113:
 		// q pressed: output a pgm file and then quit program
 		fmt.Println("q pressed");
+
+		writeOutputImage(p, d, currentTurn, world)
+
+		StopControlServer()
+		os.Exit(0)
 	case 115:
 		// s pressed: output a pgm file
 		fmt.Println("s pressed");
 
-		writeOutputImage(p, d, world)
+		writeOutputImage(p, d, currentTurn, world)
 	default:
 	}
 } 

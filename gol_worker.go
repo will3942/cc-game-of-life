@@ -2,74 +2,127 @@ package main
 
 import (
 //  "fmt"
-  "sync"
-  "github.com/ChrisGora/semaphore"
+//  "time"
 )
 
-
-type bufferParams struct{
-  buffer *buffer
-  spaceAvailable semaphore.Semaphore
-  workAvailable semaphore.Semaphore
-  mutex *sync.Mutex
+// Params passed to a worker
+type workerParams struct {
+  id int
+  gameParams golParams
+  seg segment
+  inputChan  chan uint8
+  outputChan chan uint8
+  doneChan chan bool
 }
 
-func newBufferParams(threads int) bufferParams{
-  return bufferParams{
-    buffer: &buffer{
-      b:     make([]workerData, threads),
-      size:  threads,
-      read:  0,
-      write: 0,
-    },
-    spaceAvailable: semaphore.Init(threads, threads),
-    workAvailable : semaphore.Init(threads, 0),
-    mutex: &sync.Mutex{},
+// Return the life value of a neighbour
+func getNeighbourLifeValue(world [][]byte, x int, y int) byte {
+  worldHeight := cap(world)
+  worldWidth := cap(world[0])
+
+  wrappedX := 0
+  wrappedY := 0
+
+  if (x > (worldWidth - 1)) {
+    wrappedX = (x - worldWidth)
+  } else if (x < 0) {
+    wrappedX = (worldWidth + x)
+  } else {
+    wrappedX = x
   }
-}
 
-
-func populateWorldWithAliveCells(world [][]byte, aliveCells []cell) [][]byte {
-  for i := range aliveCells {
-    cell := aliveCells[i]
-    world[cell.y][cell.x] = 0xFF
+  if (y > (worldHeight - 1)) {
+    wrappedY = (y - worldHeight)
+  } else if (y < 0) {
+    wrappedY = (worldHeight + y)
+  } else {
+    wrappedY = y
   }
-  return world
+
+  return world[wrappedY][wrappedX]
 }
 
+// Return a number of living neighbours for a given x,y coordinate
+func getNumLiveNeighbours(world [][]byte, x int, y int) int {
+  numLiveNeighbours := 0
 
-func golWorker(workBufferParams bufferParams, responseBufferParams bufferParams) {
-  // Obtain work
-  workBufferParams.workAvailable.Wait()
-  workBufferParams.mutex.Lock()
+  neighbourOffsets := [][]int{
+    {-1, -1},
+    {-1, 0},
+    {-1, 1},
+    {0, -1},
+    {0, 1},
+    {1, -1},
+    {1, 0},
+    {1, 1},
+  }
 
-  wData := workBufferParams.buffer.get()
-
-  // Generate new world based on worker data
-  world := createNewWorld(wData.params.imageWidth, wData.params.imageHeight)
-  
-  world = populateWorldWithAliveCells(world, wData.aliveCells)
-
-  newWorld := createNewWorld(wData.params.imageWidth, wData.params.imageHeight)
-  var newAliveCells []cell
-
-  for y := wData.s.startY; y < wData.s.endY; y++ {
-    for x := 0; x < wData.params.imageWidth; x++ {
-      newWorld[y][x] = getNewLifeValue(world, x, y)
-      if (newWorld[y][x] != 0) {
-        newAliveCells = append(newAliveCells, cell{x: x, y: y})
-      }
+  for i := range neighbourOffsets {
+    offsettedX := x + neighbourOffsets[i][0]
+    offsettedY := y + neighbourOffsets[i][1]
+    
+    if (getNeighbourLifeValue(world, offsettedX, offsettedY) != 0) {
+      numLiveNeighbours++
     }
   }
 
-  // Add to response buffer
-  responseBufferParams.spaceAvailable.Wait()
-  responseBufferParams.mutex.Lock()
-  responseBufferParams.buffer.put(workerData{s: wData.s, aliveCells: newAliveCells, params: wData.params})
-  responseBufferParams.mutex.Unlock()
-  responseBufferParams.workAvailable.Post()
+  return numLiveNeighbours
+}
 
-  // Release worker to obtain more work
-  workBufferParams.mutex.Unlock()
-  workBufferParams.spaceAvailable.Post()
+// Return a new life value for a given world and coordinates
+func getNewLifeValue(world [][]byte, x int, y int) byte {
+  initialLifeValue := world[y][x]
+
+  numLiveNeighbours := getNumLiveNeighbours(world, x, y)
+
+  if (initialLifeValue == 0) {
+    if (numLiveNeighbours != 3) {
+      return initialLifeValue
+    }
+    
+    return (initialLifeValue ^ 0xFF)
+  } else {
+    if (numLiveNeighbours < 2) {
+      return (initialLifeValue ^ 0xFF)
+    }
+
+    if (numLiveNeighbours <= 3) {
+      return initialLifeValue
+    }
+    
+    return (initialLifeValue ^ 0xFF)
+  }
+}
+
+func golWorker(wParams workerParams) {
+  // Obtain work
+  
+  //fmt.Println("worker ", wParams.id, " is processing.")
+
+  // Obtain worker state from input channel
+  wState := getNewStateFromChan(wParams.gameParams, wParams.inputChan)
+
+  newWorld := createNewWorld(wParams.gameParams.imageWidth, wParams.gameParams.imageHeight)
+
+  var newAliveCells []cell
+
+  for y := 0; y < wParams.gameParams.imageHeight; y++ {
+    for x := 0; x < wParams.gameParams.imageWidth; x++ {
+      if (y >= wParams.seg.startY && y <= wParams.seg.endY) {
+        newWorld[y][x] = getNewLifeValue(wState.world, x, y)
+      }
+
+      if (newWorld[y][x] != 0) {
+        newAliveCells = append(newAliveCells, cell{x: x, y: y})
+      }
+
+      // Send byte on output channel
+      wParams.outputChan <- newWorld[y][x]
+    }
+  }
+
+  //fmt.Println("worker ", wParams.id, " is done processing.")
+
+  close(wParams.outputChan)
+  wParams.doneChan <- true
 }

@@ -4,6 +4,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"os"
 	"testing"
+//	"fmt"
 )
 
 func Test(t *testing.T) {
@@ -172,7 +173,8 @@ func Test(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			alive := gameOfLife(test.args.p, nil)
-			//fmt.Println("Ran test:", test.name)
+			
+			//fmt.Println("alive = ", alive, ", expectedAlive = ", test.args.expectedAlive)
 			if test.name != "trace" {
 				assert.ElementsMatch(t, alive, test.args.expectedAlive)
 			}

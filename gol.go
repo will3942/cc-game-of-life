@@ -8,88 +8,16 @@ import (
 	//"github.com/ChrisGora/semaphore"
 )
 
+// type of a segment to do work on
 type segment struct {
-	startY	int
-	endY		int
+  startY  int
+  endY    int
 }
 
-// Return the life value of a neighbour
-func getNeighbourLifeValue(world [][]byte, x int, y int) byte {
-	worldHeight := cap(world)
-	worldWidth := cap(world[0])
-
-	wrappedX := 0
-	wrappedY := 0
-
-	if (x > (worldWidth - 1)) {
-		wrappedX = (x - worldWidth)
-	} else if (x < 0) {
-		wrappedX = (worldWidth + x)
-	} else {
-		wrappedX = x
-	}
-
-	if (y > (worldHeight - 1)) {
-		wrappedY = (y - worldHeight)
-	} else if (y < 0) {
-		wrappedY = (worldHeight + y)
-	} else {
-		wrappedY = y
-	}
-
-	return world[wrappedY][wrappedX]
-}
-
-// Return a number of living neighbours for a given x,y coordinate
-func getNumLiveNeighbours(world [][]byte, x int, y int) int {
-	numLiveNeighbours := 0
-
-	neighbourOffsets := [][]int{
-	  {-1, -1},
-	  {-1, 0},
-	  {-1, 1},
-	  {0, -1},
-	  {0, 1},
-	  {1, -1},
-	  {1, 0},
-	  {1, 1},
-	}
-
-	for i := range neighbourOffsets {
-		offsettedX := x + neighbourOffsets[i][0]
-		offsettedY := y + neighbourOffsets[i][1]
-		
-		if (getNeighbourLifeValue(world, offsettedX, offsettedY) != 0) {
-			numLiveNeighbours++
-		}
-	}
-
-	return numLiveNeighbours
-}
-
-// Return a new life value for a given world and coordinates
-func getNewLifeValue(world [][]byte, x int, y int) byte {
-	initialLifeValue := world[y][x]
-
-	numLiveNeighbours := getNumLiveNeighbours(world, x, y)
-
-	if (initialLifeValue == 0) {
-		if (numLiveNeighbours != 3) {
-			return initialLifeValue
-		}
-		
-		return (initialLifeValue ^ 0xFF)
-	} else {
-		if (numLiveNeighbours < 2) {
-			return (initialLifeValue ^ 0xFF)
-		}
-
-		if (numLiveNeighbours <= 3) {
-			return initialLifeValue
-		}
-		
-		return (initialLifeValue ^ 0xFF)
-	}
+// type of a current state of a world
+type state struct {
+	world [][]byte
+	aliveCells []cell
 }
 
 // Return a new world slice with a given size
@@ -118,73 +46,83 @@ func splitWorldIntoSegments(p golParams) []segment {
 	return segments
 }
 
-//calculate new state of all segments using buffers and return new world.
-//HAS TOO MANY ARGUMENTS?
-func calculateNewState(p golParams, workBufferParams bufferParams, resBufferParams bufferParams, segments []segment, aliveCells []cell) [][]byte{
-	// Add worker data to buffer
-	for i := range segments {
-		workBufferParams.spaceAvailable.Wait()
-		workBufferParams.mutex.Lock()
+// Calculates new state of the world using channels without memory sharing
+func createWorkers(p golParams, segments []segment, world [][]byte) []workerParams {
+	// Create array of workers
+	workers := make([]workerParams, p.threads)
+
+	// Get number of bytes in image
+	numBytesInImage := (p.imageWidth * p.imageHeight)
 	
-		workBufferParams.buffer.put(workerData{s: segments[i], aliveCells: aliveCells, params: p})
-		
-		workBufferParams.mutex.Unlock()
-		workBufferParams.workAvailable.Post()
-
-		go golWorker(workBufferParams, resBufferParams)
+	// Create input and output channels for workers
+	for i := range segments {
+		workers[i] = workerParams{
+			id: i,
+			gameParams: p,
+			seg: segments[i],
+			inputChan: make(chan uint8, numBytesInImage),
+			outputChan: make(chan uint8, numBytesInImage),
+			doneChan: make(chan bool),
+		}
 	}
 
-	newWorld := createNewWorld(p.imageWidth, p.imageHeight)
+	// Send world to workers
+	go func() {
+		for y := range world {
+			for _, b := range world[y] {
+				for _, worker := range workers {
+					worker.inputChan <- b
+				}
+			}
+		}
 
-	for i := 0; i < len(segments); i++ {
-	// Obtain newWorld
-	resBufferParams.workAvailable.Wait()
-	resBufferParams.mutex.Lock()
+		for _, worker := range workers {
+			close(worker.inputChan)
 
-	resData := resBufferParams.buffer.get()
+			go golWorker(worker)
+		}
+	}()
 
-	newWorld = populateWorldWithAliveCells(newWorld, resData.aliveCells)
-
-	resBufferParams.mutex.Unlock()
-	resBufferParams.spaceAvailable.Post()
-	}
-
-	return newWorld
+	return workers
 }
 
-//Return final cells alive.
-func getFinalAlive(p golParams, world [][]byte) []cell{
-	var finalAlive []cell
+// Return alive cells.
+func getAliveCells(p golParams, world [][]byte) []cell{
+	var aliveCells []cell
 	// Go through the world and append the cells that are still alive.
 	for y := 0; y < p.imageHeight; y++ {
 		for x := 0; x < p.imageWidth; x++ {
 			if world[y][x] != 0 {
-				finalAlive = append(finalAlive, cell{x: x, y: y})
+				aliveCells = append(aliveCells, cell{x: x, y: y})
 			}
 		}
 	}
-	return finalAlive
+	return aliveCells
 }
 
-// distributor divides the work between workers and interacts with other goroutines.
-func distributor(p golParams, d distributorChans, alive chan []cell) {
-	// Variable to decide whether to output an image at the end
-	outputAtEnd := false
+// Populates world with an array of alive cells
+func populateWorldWithAliveCells(world [][]byte, aliveCells []cell) [][]byte {
+  for i := range aliveCells {
+    cell := aliveCells[i]
+    world[cell.y][cell.x] = 0xFF
+  }
 
+  return world
+}
+
+// Get new state from golParams and a channel of bytes
+func getNewStateFromChan(p golParams, c <-chan uint8) state {
 	// Create the 2D slice to store the world.
 	world := createNewWorld(p.imageWidth, p.imageHeight)
 
-	// Request the io goroutine to read in the image with the given filename.
-	d.io.command <- ioInput
-	d.io.filename <- strings.Join([]string{strconv.Itoa(p.imageWidth), strconv.Itoa(p.imageHeight)}, "x")
-
-	// Create array to hold slice
+	// Create array to hold alive cells
 	var aliveCells []cell
 
-	// The io goroutine sends the requested image byte by byte, in rows.
+	// The channel sends the world byte by byte, in rows.
+	// This populates the initial alive cells
 	for y := 0; y < p.imageHeight; y++ {
 		for x := 0; x < p.imageWidth; x++ {
-			val := <-d.io.inputVal
+			val := <-c
 			if val != 0 {
 				world[y][x] = val
 				aliveCells = append(aliveCells, cell{x: x, y: y})
@@ -192,52 +130,80 @@ func distributor(p golParams, d distributorChans, alive chan []cell) {
 		}
 	}
 
-	// Create the individual worker segments
-	segments := splitWorldIntoSegments(p)
+	newState := state{
+		world: world,
+		aliveCells: aliveCells,
+	}
 
-	workBufferParams := newBufferParams(p.threads)
-	resBufferParams := newBufferParams(p.threads)
+	return newState
+}
 
-	// Calculate the new state of Game of Life after the given number of turns.
-	for turns := 0; turns < p.turns; turns++ {
-		newWorld := calculateNewState(p, workBufferParams, resBufferParams, segments, aliveCells)
-		world = newWorld
+// Get new state from workers
+func getNewStateFromWorkers(workers []workerParams) state {
+	// Get golParams from first worker
+	p := workers[0].gameParams
 
-		var newAliveCells []cell
-		for y := 0; y < p.imageHeight; y++ {
-			for x := 0; x < p.imageWidth; x++ {
-				if world[y][x] != 0 {
-					newAliveCells = append(newAliveCells, cell{x: x, y: y})
+	// Create the 2D slice to store the world.
+	world := createNewWorld(p.imageWidth, p.imageHeight)
+
+	for y := 0; y < p.imageHeight; y++ {
+		for x := 0; x < p.imageWidth; x++ {
+			for _, worker := range workers {
+				val := <-worker.outputChan
+
+				if (val != 0) {
+					world[y][x] = val
 				}
 			}
 		}
+	}
 
-		aliveCells = newAliveCells
-		
+	// Create array to hold alive cells
+	aliveCells := getAliveCells(p, world)
+
+	newState := state{
+		world: world,
+		aliveCells: aliveCells,
+	}
+
+	return newState
+}
+
+// distributor divides the work between workers and interacts with other goroutines.
+func distributor(p golParams, d distributorChans, alive chan []cell) {
+	// Request the io goroutine to read in the image with the given filename.
+	d.io.command <- ioInput
+	d.io.filename <- strings.Join([]string{strconv.Itoa(p.imageWidth), strconv.Itoa(p.imageHeight)}, "x")
+
+	dState := getNewStateFromChan(p, d.io.inputVal)
+
+	// Create the individual worker segments
+	segments := splitWorldIntoSegments(p)
+
+	// Calculate the new state of Game of Life after the given number of turns.
+	for turns := 0; turns < p.turns; turns++ {
+		// Create workers array
+		workers := createWorkers(p, segments, dState.world)
+
+		for _, worker := range workers {
+			<-worker.doneChan
+		}
+
+		// Get new state from workers
+		dState = getNewStateFromWorkers(workers)
 
 		select {
     	case keyPress := <-d.keyChan:
-        handleKeyPress(p, d, keyPress, turns, world)
-
-        if (keyPress == 113) {
-        	// q pressed
-        	outputAtEnd = true
-        }
+        handleKeyPress(p, d, keyPress, turns, dState.world)
     	default:
         // Receiving would block if no key press occurred
     }
 	}
 
-	if (outputAtEnd) {
-		writeOutputImage(p, d, world)
-	}
-
-	finalAlive := getFinalAlive(p, world)
-	
 	// Make sure that the Io has finished any output before exiting.
 	d.io.command <- ioCheckIdle
 	<-d.io.idle
 
 	// Return the coordinates of cells that are still alive.
-	alive <- finalAlive
+	alive <- dState.aliveCells
 }
