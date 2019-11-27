@@ -13,16 +13,6 @@ type segment struct {
 	endY		int
 }
 
-// Uniquely append a cell to cells slice
-func uniqueAppendCell(cells []cell, cell cell) []cell {
-    for _, ele := range cells {
-        if (ele.x == cell.x && ele.y == cell.y) {
-            return cells
-        }
-    }
-    return append(cells, cell)
-}
-
 // Return the life value of a neighbour
 func getNeighbourLifeValue(world [][]byte, x int, y int) byte {
 	worldHeight := cap(world)
@@ -171,38 +161,32 @@ func distributor(p golParams, d distributorChans, alive chan []cell) {
 	resSpaceAvailable := semaphore.Init(p.threads, p.threads)
 	resWorkAvailable := semaphore.Init(p.threads, 0)
 
+	// Test: Add worker data to buffer
+	for i := range segments {
+		fmt.Println(segments)
+		spaceAvailable.Wait()
+		mutex.Lock()
+		fmt.Println("put", i)
+		buffer.put(workerData{s: segments[i], aliveCells: aliveCells, params: p})
+		fmt.Println("print ", i)
+		mutex.Unlock()
+		workAvailable.Post()
+	}
+
+	fmt.Println("distributor - golworker")
+	go golWorker(&buffer, spaceAvailable, workAvailable, mutex, &resBuffer, resSpaceAvailable, resWorkAvailable, resMutex)
+
 	// Calculate the new state of Game of Life after the given number of turns.
 	for turns := 0; turns < p.turns; turns++ {
-		// Add worker data to buffer
-		for i := range segments {
-			fmt.Println(segments)
-			spaceAvailable.Wait()
-			mutex.Lock()
-			fmt.Println("put", i)
-			buffer.put(workerData{s: segments[i], aliveCells: aliveCells, params: p})
-			fmt.Println("print ", i)
-			mutex.Unlock()
-			workAvailable.Post()
+		newWorld := createNewWorld(p.imageWidth, p.imageHeight)
 
-			fmt.Println("distributor - golworker ", i)
-			go golWorker(&buffer, spaceAvailable, workAvailable, mutex, &resBuffer, resSpaceAvailable, resWorkAvailable, resMutex)
+		for y := 0; y < p.imageHeight; y++ {
+			for x := 0; x < p.imageWidth; x++ {
+				newWorld[y][x] = getNewLifeValue(world, x, y)
+			}
 		}
 
-		for i := range segments {
-			fmt.Println("distributor ", i)
-    	// Obtain newWorld
-    	resWorkAvailable.Wait()
-    	resMutex.Lock()
-
-    	resData := resBuffer.get()
-
-    	fmt.Println(resData)
-
-    	resMutex.Unlock()
-    	resSpaceAvailable.Post()
-		}
-
-		world = world
+		world = newWorld
 	}
 
 	// Create an empty slice to store coordinates of cells that are still alive after p.turns are done.
