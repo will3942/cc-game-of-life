@@ -13,6 +13,16 @@ type segment struct {
 	endY		int
 }
 
+// Uniquely append a cell to cells slice
+func uniqueAppendCell(cells []cell, cell cell) []cell {
+    for _, ele := range cells {
+        if (ele.x == cell.x && ele.y == cell.y) {
+            return cells
+        }
+    }
+    return append(cells, cell)
+}
+
 // Return the life value of a neighbour
 func getNeighbourLifeValue(world [][]byte, x int, y int) byte {
 	worldHeight := cap(world)
@@ -110,7 +120,6 @@ func splitWorldIntoSegments(p golParams) []segment {
 	heightOfASegment := p.imageHeight / p.threads
 
 	for i := range segments {
-//		fmt.Println("segment ", i, ": startY = ", (i * heightOfASegment), ", endY = ", (i * heightOfASegment) + heightOfASegment)
 		segments[i] = segment{
 			startY: (i * heightOfASegment),
 			endY:		(i * heightOfASegment) + heightOfASegment,
@@ -154,7 +163,7 @@ func distributor(p golParams, d distributorChans, alive chan []cell) {
 
 	// Calculate the new state of Game of Life after the given number of turns.
 	for turns := 0; turns < p.turns; turns++ {
-//		fmt.Println("turns = ", turns)
+		fmt.Println("turns = ", turns)
 		// Add worker data to buffer
 		for i := range segments {
 			//fmt.Println(segments)
@@ -166,32 +175,33 @@ func distributor(p golParams, d distributorChans, alive chan []cell) {
 			workBufferParams.mutex.Unlock()
 			workBufferParams.workAvailable.Post()
 
-//			fmt.Println(segments[i])
+			fmt.Println(segments[i])
 
 			go golWorker(workBufferParams, resBufferParams)
 		}
 
 		newWorld := createNewWorld(p.imageWidth, p.imageHeight)
 	
-		for i := 0; i < len(segments); i++ {
-    	// Obtain newWorld
-    	resBufferParams.workAvailable.Wait()
-    	resBufferParams.mutex.Lock()
+		for i := range segments {
+	    	// Obtain newWorld
+	    	resBufferParams.workAvailable.Wait()
+	    	resBufferParams.mutex.Lock()
 
-    	resData := resBufferParams.buffer.get()
+	    	resData := resBufferParams.buffer.get()
 
-    	//newWorld = removeDeadCells(newWorld, aliveCells,resData.aliveCells, segments[i])
-    	newWorld = populateWorldWithAliveCells(newWorld, resData.aliveCells)
+	    	newWorld = removeDeadCells(newWorld, aliveCells,resData.aliveCells, segments[i])
+	    	newWorld = populateWorldWithAliveCells(newWorld, resData.aliveCells)
+	   
 
-//    	fmt.Println("i = ", i)
-//    	fmt.Println("res data \t",resData.aliveCells)
 
-    	resBufferParams.mutex.Unlock()
-    	resBufferParams.spaceAvailable.Post()
+	    	fmt.Println("i = ", i)
+	    	fmt.Println("res data \t",resData.aliveCells)
+
+	    	resBufferParams.mutex.Unlock()
+	    	resBufferParams.spaceAvailable.Post()
 		}
 
 		world = newWorld
-
 		var newAliveCells []cell
 		for y := 0; y < p.imageHeight; y++ {
 			for x := 0; x < p.imageWidth; x++ {
@@ -200,9 +210,6 @@ func distributor(p golParams, d distributorChans, alive chan []cell) {
 				}
 			}
 		}
-
-//		fmt.Println("newAliveCells = ", newAliveCells);
-
 		aliveCells = newAliveCells
 	}
 

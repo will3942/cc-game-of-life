@@ -1,7 +1,7 @@
 package main
 
 import (
-//  "fmt"
+  "fmt"
   "sync"
   "github.com/ChrisGora/semaphore"
 )
@@ -37,20 +37,20 @@ func populateWorldWithAliveCells(world [][]byte, aliveCells []cell) [][]byte {
   return world
 }
 
+
 func removeDeadCells(world [][]byte, oldAlive []cell, newAlive []cell, s segment) [][]byte{
   for i := range oldAlive {
     cell :=oldAlive[i]
     alive := false
     for j := range newAlive{
-      if oldAlive[i] == newAlive[j] || ((cell.y < s.startY) || (cell.y > s.endY)) {
+      if oldAlive[i] == newAlive[j] || ((cell.y < s.startY) || (cell.y > s.endY)){
         alive = true
       }
-    }
+    }  
     if alive == false {
         world[cell.y][cell.x] = 0
     }
   }
-
   return world
 }
 
@@ -61,7 +61,7 @@ func golWorker(workBufferParams bufferParams, responseBufferParams bufferParams)
     workBufferParams.mutex.Lock()
 
     wData := workBufferParams.buffer.get()
-//    fmt.Println("worker data alive cells",wData.aliveCells, "for ", wData.s.startY)
+    fmt.Println("worker data alive cells",wData.aliveCells, "for ", wData.s.startY)
 
     // Generate new world based on worker data
     world := createNewWorld(wData.params.imageWidth, wData.params.imageHeight)
@@ -79,7 +79,7 @@ func golWorker(workBufferParams bufferParams, responseBufferParams bufferParams)
         }
       }
     }
-//    fmt.Println("new alive cells = " , newAliveCells, "for ", wData.s.startY)
+    fmt.Println("new alive cells = " , newAliveCells, "for ", wData.s.startY)
 
     // Add to response buffer
     responseBufferParams.spaceAvailable.Wait()
