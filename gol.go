@@ -1,9 +1,10 @@
 package main
 
 import (
-//	"fmt"
+	"fmt"
 	"strconv"
 	"strings"
+	"time"
 	//"sync"
 	//"github.com/ChrisGora/semaphore"
 )
@@ -62,7 +63,7 @@ func createWorkers(p golParams, segments []segment, world [][]byte) []workerPara
 			seg: segments[i],
 			inputChan: make(chan uint8, numBytesInImage),
 			outputChan: make(chan uint8, numBytesInImage),
-			doneChan: make(chan bool),
+			doneChan: make(chan bool, 1),
 		}
 	}
 
@@ -183,14 +184,19 @@ func distributor(p golParams, d distributorChans, alive chan []cell) {
 	// Calculate the new state of Game of Life after the given number of turns.
 	for turns := 0; turns < p.turns; turns++ {
 		// Create workers array
+		fmt.Println(time.Now(), ": turn started = ", turns)
 		workers := createWorkers(p, segments, dState.world)
 
 		for _, worker := range workers {
 			<-worker.doneChan
 		}
 
+		fmt.Println(time.Now(), ": turn construction started = ", turns)
+
 		// Get new state from workers
 		dState = getNewStateFromWorkers(workers)
+
+		fmt.Println(time.Now(), ": turn finished = ", turns)
 
 		select {
     	case keyPress := <-d.keyChan:
