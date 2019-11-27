@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Return the life value of a neighbour
@@ -119,6 +120,8 @@ func distributor(p golParams, d distributorChans, alive chan []cell) {
 
 	// Calculate the new state of Game of Life after the given number of turns.
 	for turns := 0; turns < p.turns; turns++ {
+		fmt.Println(time.Now(), ": turn started = ", turns)
+
 		newWorld := createNewWorld(p.imageWidth, p.imageHeight)
 
 		for y := 0; y < p.imageHeight; y++ {
@@ -126,6 +129,8 @@ func distributor(p golParams, d distributorChans, alive chan []cell) {
 				newWorld[y][x] = getNewLifeValue(world, x, y)
 			}
 		}
+
+		fmt.Println(time.Now(), ": turn finished = ", turns)
 
 		world = newWorld
 	}
