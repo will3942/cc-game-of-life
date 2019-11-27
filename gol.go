@@ -1,10 +1,10 @@
 package main
 
 import (
-	//"fmt"
+	"fmt"
 	"strconv"
 	"strings"
-	//"time"
+	"time"
 	//"sync"
 	//"github.com/ChrisGora/semaphore"
 )
@@ -76,19 +76,17 @@ func createWorkers(p golParams, segments []segment, world [][]byte) []workerPara
 // Sends world to workers
 func sendWorldToWorkers(workers []workerParams, world [][]byte) {
 	// Send world to workers
-	go func() {
-		for _, worker := range workers {
-			worker.start <- true
-		}
+	for _, worker := range workers {
+		worker.start <- true
+	}
 
-		for y := range world {
-			for _, b := range world[y] {
-				for _, worker := range workers {
-					worker.inputChan <- b
-				}
+	for y := range world {
+		for _, b := range world[y] {
+			for _, worker := range workers {
+				worker.inputChan <- b
 			}
 		}
-	}()
+	}
 }
 
 // Return alive cells.
@@ -116,10 +114,7 @@ func populateWorldWithAliveCells(world [][]byte, aliveCells []cell) [][]byte {
 }
 
 // Get new state from golParams and a channel of bytes
-func getNewStateFromChan(p golParams, c <-chan uint8) state {
-	// Create the 2D slice to store the world.
-	world := createNewWorld(p.imageWidth, p.imageHeight)
-
+func getNewStateFromChan(p golParams, world [][]byte, c <-chan uint8) state {
 	// Create array to hold alive cells
 	var aliveCells []cell
 
@@ -128,8 +123,10 @@ func getNewStateFromChan(p golParams, c <-chan uint8) state {
 	for y := 0; y < p.imageHeight; y++ {
 		for x := 0; x < p.imageWidth; x++ {
 			val := <-c
+
+			world[y][x] = val
+
 			if val != 0 {
-				world[y][x] = val
 				aliveCells = append(aliveCells, cell{x: x, y: y})
 			}
 		}
@@ -144,21 +141,18 @@ func getNewStateFromChan(p golParams, c <-chan uint8) state {
 }
 
 // Get new state from workers
-func getNewStateFromWorkers(workers []workerParams) state {
+func getNewStateFromWorkers(world [][]byte, workers []workerParams) state {
 	// Get golParams from first worker
 	p := workers[0].gameParams
 
-	// Create the 2D slice to store the world.
-	world := createNewWorld(p.imageWidth, p.imageHeight)
+	//world := createNewWorld(p.imageWidth, p.imageHeight)
 
 	for y := 0; y < p.imageHeight; y++ {
 		for x := 0; x < p.imageWidth; x++ {
 			for _, worker := range workers {
 				val := <-worker.outputChan
 
-				if (val != 0) {
-					world[y][x] = val
-				}
+				world[y][x] = val
 			}
 		}
 	}
@@ -180,7 +174,10 @@ func distributor(p golParams, d distributorChans, alive chan []cell) {
 	d.io.command <- ioInput
 	d.io.filename <- strings.Join([]string{strconv.Itoa(p.imageWidth), strconv.Itoa(p.imageHeight)}, "x")
 
-	dState := getNewStateFromChan(p, d.io.inputVal)
+	// Create new 2D slice to store world
+	world := createNewWorld(p.imageWidth, p.imageHeight)
+
+	dState := getNewStateFromChan(p, world, d.io.inputVal)
 
 	// Create the individual worker segments
 	segments := splitWorldIntoSegments(p)
@@ -191,7 +188,7 @@ func distributor(p golParams, d distributorChans, alive chan []cell) {
 	// Calculate the new state of Game of Life after the given number of turns.
 	for turns := 0; turns < p.turns; turns++ {
 		// Create workers array
-		//fmt.Println(time.Now(), ": turn started = ", turns)
+		fmt.Println(time.Now(), ": turn started = ", turns)
 
 		sendWorldToWorkers(workers, dState.world)
 
@@ -202,7 +199,7 @@ func distributor(p golParams, d distributorChans, alive chan []cell) {
 		//fmt.Println(time.Now(), ": turn construction started = ", turns)
 
 		// Get new state from workers
-		dState = getNewStateFromWorkers(workers)
+		dState = getNewStateFromWorkers(world, workers)
 
 		//fmt.Println(time.Now(), ": turn finished = ", turns)
 

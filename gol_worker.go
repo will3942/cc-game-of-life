@@ -2,7 +2,6 @@ package main
 
 import (
 //  "fmt"
-//  "time"
 )
 
 // Params passed to a worker
@@ -96,35 +95,32 @@ func getNewLifeValue(world [][]byte, x int, y int) byte {
 }
 
 func golWorker(wParams workerParams) {
+  //fmt.Println("worker ", wParams.id, " started....")
+
+  world := createNewWorld(wParams.gameParams.imageWidth, wParams.gameParams.imageHeight)
+
   for {
-    // Obtain work
-    <-wParams.start
-    
-    //fmt.Println("worker ", wParams.id, " is processing.")
+    select {
+    case <-wParams.start:
+      // Obtain work
 
-    // Obtain worker state from input channel
-    wState := getNewStateFromChan(wParams.gameParams, wParams.inputChan)
+      //fmt.Println("worker ", wParams.id, " is processing.")
 
-    newWorld := createNewWorld(wParams.gameParams.imageWidth, wParams.gameParams.imageHeight)
+      // Obtain worker state from input channel
+      wState := getNewStateFromChan(wParams.gameParams, world, wParams.inputChan)
 
-    var newAliveCells []cell
-
-    for y := 0; y < wParams.gameParams.imageHeight; y++ {
-      for x := 0; x < wParams.gameParams.imageWidth; x++ {
-        if (y >= wParams.seg.startY && y <= wParams.seg.endY) {
-          newWorld[y][x] = getNewLifeValue(wState.world, x, y)
+      for y := 0; y < wParams.gameParams.imageHeight; y++ {
+        for x := 0; x < wParams.gameParams.imageWidth; x++ {
+          if (y >= wParams.seg.startY && y <= wParams.seg.endY) {
+            wParams.outputChan <- getNewLifeValue(wState.world, x, y)
+          } else {
+            wParams.outputChan <- 0
+          }
         }
-
-        if (newWorld[y][x] != 0) {
-          newAliveCells = append(newAliveCells, cell{x: x, y: y})
-        }
-
-        // Send byte on output channel
-        wParams.outputChan <- newWorld[y][x]
       }
-    }
 
-    //fmt.Println("worker ", wParams.id, " is done processing.")
-    wParams.done <- true
+      //fmt.Println("worker ", wParams.id, " is done processing.")
+      wParams.done <- true
+    }
   }
 }
