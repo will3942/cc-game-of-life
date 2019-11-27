@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fmt"
+//	"fmt"
 	"strconv"
 	"strings"
 	"sync"
@@ -152,28 +152,26 @@ func distributor(p golParams, d distributorChans, alive chan []cell) {
 	buffer := newBuffer(p.threads)
 	mutex := &sync.Mutex{}
 
-	spaceAvailable := semaphore.Init(p.threads, p.threads)
-	workAvailable := semaphore.Init(p.threads, 0)
+	spaceAvailable := semaphore.Init(1, 1)
+	workAvailable := semaphore.Init(1, 0)
 
 	resBuffer := newBuffer(p.threads)
 	resMutex := &sync.Mutex{}
 
-	resSpaceAvailable := semaphore.Init(p.threads, p.threads)
-	resWorkAvailable := semaphore.Init(p.threads, 0)
+	resSpaceAvailable := semaphore.Init(1, 1)
+	resWorkAvailable := semaphore.Init(1, 0)
 
 	// Test: Add worker data to buffer
 	for i := range segments {
-		fmt.Println(segments)
 		spaceAvailable.Wait()
 		mutex.Lock()
-		fmt.Println("put", i)
+		
 		buffer.put(workerData{s: segments[i], aliveCells: aliveCells, params: p})
-		fmt.Println("print ", i)
+		
 		mutex.Unlock()
 		workAvailable.Post()
 	}
 
-	fmt.Println("distributor - golworker")
 	go golWorker(&buffer, spaceAvailable, workAvailable, mutex, &resBuffer, resSpaceAvailable, resWorkAvailable, resMutex)
 
 	// Calculate the new state of Game of Life after the given number of turns.
