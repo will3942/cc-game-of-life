@@ -12,7 +12,8 @@ type workerParams struct {
   seg segment
   inputChan  chan uint8
   outputChan chan uint8
-  doneChan chan bool
+  start chan bool
+  done chan bool
 }
 
 // Return the life value of a neighbour
@@ -95,34 +96,35 @@ func getNewLifeValue(world [][]byte, x int, y int) byte {
 }
 
 func golWorker(wParams workerParams) {
-  // Obtain work
-  
-  //fmt.Println("worker ", wParams.id, " is processing.")
+  for {
+    // Obtain work
+    <-wParams.start
+    
+    //fmt.Println("worker ", wParams.id, " is processing.")
 
-  // Obtain worker state from input channel
-  wState := getNewStateFromChan(wParams.gameParams, wParams.inputChan)
+    // Obtain worker state from input channel
+    wState := getNewStateFromChan(wParams.gameParams, wParams.inputChan)
 
-  newWorld := createNewWorld(wParams.gameParams.imageWidth, wParams.gameParams.imageHeight)
+    newWorld := createNewWorld(wParams.gameParams.imageWidth, wParams.gameParams.imageHeight)
 
-  var newAliveCells []cell
+    var newAliveCells []cell
 
-  for y := 0; y < wParams.gameParams.imageHeight; y++ {
-    for x := 0; x < wParams.gameParams.imageWidth; x++ {
-      if (y >= wParams.seg.startY && y <= wParams.seg.endY) {
-        newWorld[y][x] = getNewLifeValue(wState.world, x, y)
+    for y := 0; y < wParams.gameParams.imageHeight; y++ {
+      for x := 0; x < wParams.gameParams.imageWidth; x++ {
+        if (y >= wParams.seg.startY && y <= wParams.seg.endY) {
+          newWorld[y][x] = getNewLifeValue(wState.world, x, y)
+        }
+
+        if (newWorld[y][x] != 0) {
+          newAliveCells = append(newAliveCells, cell{x: x, y: y})
+        }
+
+        // Send byte on output channel
+        wParams.outputChan <- newWorld[y][x]
       }
-
-      if (newWorld[y][x] != 0) {
-        newAliveCells = append(newAliveCells, cell{x: x, y: y})
-      }
-
-      // Send byte on output channel
-      wParams.outputChan <- newWorld[y][x]
     }
+
+    //fmt.Println("worker ", wParams.id, " is done processing.")
+    wParams.done <- true
   }
-
-  //fmt.Println("worker ", wParams.id, " is done processing.")
-
-  close(wParams.outputChan)
-  wParams.doneChan <- true
 }
