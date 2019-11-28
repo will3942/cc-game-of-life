@@ -1,10 +1,10 @@
 package main
 
 import (
-	"fmt"
+//	"fmt"
 	"strconv"
 	"strings"
-	"time"
+//	"time"
 	//"sync"
 	//"github.com/ChrisGora/semaphore"
 )
@@ -147,18 +147,24 @@ func getNewStateFromWorkers(world [][]byte, workers []workerParams) state {
 
 	//world := createNewWorld(p.imageWidth, p.imageHeight)
 
+	// Create array to hold alive cells
+	var aliveCells []cell
+
 	for y := 0; y < p.imageHeight; y++ {
 		for x := 0; x < p.imageWidth; x++ {
 			for _, worker := range workers {
 				val := <-worker.outputChan
 
-				world[y][x] = val
+				if (y >= worker.seg.startY && y <= worker.seg.endY) {
+					world[y][x] = val
+				}
+			}
+
+			if (world[y][x] != 0) {
+				aliveCells = append(aliveCells, cell{x: x, y: y})
 			}
 		}
 	}
-
-	// Create array to hold alive cells
-	aliveCells := getAliveCells(p, world)
 
 	newState := state{
 		world: world,
@@ -188,7 +194,7 @@ func distributor(p golParams, d distributorChans, alive chan []cell) {
 	// Calculate the new state of Game of Life after the given number of turns.
 	for turns := 0; turns < p.turns; turns++ {
 		// Create workers array
-		fmt.Println(time.Now(), ": turn started = ", turns)
+		//fmt.Println(time.Now(), ": turn started = ", turns)
 
 		sendWorldToWorkers(workers, dState.world)
 
