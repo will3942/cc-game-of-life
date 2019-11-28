@@ -10,8 +10,8 @@ type workerParams struct {
   id int
   gameParams golParams
   seg segment
-  inputChan  chan uint8
-  outputChan chan uint8
+  inputChan  chan cell
+  outputChan chan cell
 }
 
 // Return the life value of a neighbour
@@ -96,24 +96,22 @@ func getNewLifeValue(world [][]byte, x int, y int) byte {
 func golWorker(wParams workerParams, wg *sync.WaitGroup) {
   defer wg.Done()
   // Obtain work
-  //fmt.Println("worker ", wParams.id, " started....")
-
-  world := createNewWorld(wParams.gameParams.imageWidth, wParams.gameParams.imageHeight)
-
-  //fmt.Println("worker ", wParams.id, " is processing.")
+  //fmt.Println("worker ", wParams.id, " is processing...")
 
   // Obtain worker state from input channel
-  wState := getNewStateFromChan(wParams.gameParams, world, wParams.inputChan)
+  wState := getNewWorkerStateFromChan(wParams.gameParams, wParams.inputChan)
 
-  for y := 0; y < wParams.gameParams.imageHeight; y++ {
+  for y := wParams.seg.startY; y < wParams.seg.endY; y++ {
     for x := 0; x < wParams.gameParams.imageWidth; x++ {
-      if (y >= wParams.seg.startY && y <= wParams.seg.endY) {
-        wParams.outputChan <- getNewLifeValue(wState.world, x, y)
-      } else {
-        wParams.outputChan <- 0
+      val := getNewLifeValue(wState.world, x, y)
+      
+      if (val != 0) {
+        wParams.outputChan <- cell{x: x, y: y}
       }
     }
   }
+
+  close(wParams.outputChan)
 
   //fmt.Println("worker ", wParams.id, " is done processing.")
 }

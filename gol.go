@@ -48,12 +48,12 @@ func splitWorldIntoSegments(p golParams) []segment {
 }
 
 // Calculates new state of the world using channels without memory sharing
-func createWorkers(p golParams, segments []segment, world [][]byte) []workerParams {
+func createWorkers(p golParams, segments []segment) []workerParams {
 	// Create array of workers
 	workers := make([]workerParams, p.threads)
 
-	// Get number of bytes in image
-	numBytesInImage := (p.imageWidth * p.imageHeight)
+	// Get number of cells in image
+	numCellsInImage := (p.imageWidth * p.imageHeight)
 	
 	// Create input and output channels for workers
 	for i := range segments {
@@ -61,23 +61,25 @@ func createWorkers(p golParams, segments []segment, world [][]byte) []workerPara
 			id: i,
 			gameParams: p,
 			seg: segments[i],
-			inputChan: make(chan uint8, numBytesInImage),
-			outputChan: make(chan uint8, numBytesInImage),
+			inputChan: make(chan cell, numCellsInImage),
+			outputChan: make(chan cell, numCellsInImage),
 		}
 	}
 
 	return workers
 }
 
-// Sends world to workers
-func sendWorldToWorkers(workers []workerParams, world [][]byte) {
-	// Send world to workers
-	for y := range world {
-		for _, b := range world[y] {
-			for _, worker := range workers {
-				worker.inputChan <- b
-			}
+// Sends alive cells to workers
+func sendAliveCellsToWorkers(workers []workerParams, s state) {
+	// Send cells to workers
+	for _, cell := range s.aliveCells {
+		for _, worker := range workers {
+			worker.inputChan <- cell
 		}
+	}
+
+	for _, worker := range workers {
+		close(worker.inputChan)
 	}
 }
 
@@ -132,29 +134,40 @@ func getNewStateFromChan(p golParams, world [][]byte, c <-chan uint8) state {
 	return newState
 }
 
-// Get new state from workers
-func getNewStateFromWorkers(world [][]byte, workers []workerParams) state {
-	// Get golParams from first worker
-	p := workers[0].gameParams
-
-	//world := createNewWorld(p.imageWidth, p.imageHeight)
+func getNewWorkerStateFromChan(p golParams, inputChan <-chan cell) state {
+	world := createNewWorld(p.imageWidth, p.imageHeight)
 
 	// Create array to hold alive cells
 	var aliveCells []cell
 
-	for y := 0; y < p.imageHeight; y++ {
-		for x := 0; x < p.imageWidth; x++ {
-			for _, worker := range workers {
-				val := <-worker.outputChan
+	// The channel sends the alive cells, cell by cell
+	for c := range inputChan {
+		world[c.y][c.x] = 0xFF
+		aliveCells = append(aliveCells, cell{x: c.x, y: c.y})
+	}
 
-				if (y >= worker.seg.startY && y <= worker.seg.endY) {
-					world[y][x] = val
-				}
-			}
+	newState := state{
+		world: world,
+		aliveCells: aliveCells,
+	}
 
-			if (world[y][x] != 0) {
-				aliveCells = append(aliveCells, cell{x: x, y: y})
-			}
+	return newState
+}
+
+// Get new state from workers
+func getNewStateFromWorkers(workers []workerParams) state {
+	// Get golParams from first worker
+	p := workers[0].gameParams
+
+	world := createNewWorld(p.imageWidth, p.imageHeight)
+
+	// Create array to hold alive cells
+	var aliveCells []cell
+
+	for _, worker := range workers {
+		for c := range worker.outputChan {
+			world[c.y][c.x] = 0xFF
+			aliveCells = append(aliveCells, cell{x: c.x, y: c.y})
 		}
 	}
 
@@ -180,19 +193,18 @@ func distributor(p golParams, d distributorChans, alive chan []cell) {
 	// Create the individual worker segments
 	segments := splitWorldIntoSegments(p)
 
-	// Create workers
-	workers := createWorkers(p, segments, dState.world)
-
 	// Calculate the new state of Game of Life after the given number of turns.
 	for turns := 0; turns < p.turns; turns++ {
 		// Create workers array
+		workers := createWorkers(p, segments)
+
 		//fmt.Println(time.Now(), ": turn started = ", turns)
 
 		var wg sync.WaitGroup
 
 		wg.Add(len(workers))
 
-		sendWorldToWorkers(workers, dState.world)
+		sendAliveCellsToWorkers(workers, dState)
 
 		for _, worker := range workers {
 			go golWorker(worker, &wg)
@@ -203,7 +215,7 @@ func distributor(p golParams, d distributorChans, alive chan []cell) {
 		//fmt.Println(time.Now(), ": turn construction started = ", turns)
 
 		// Get new state from workers
-		dState = getNewStateFromWorkers(world, workers)
+		dState = getNewStateFromWorkers(workers)
 
 		//fmt.Println(time.Now(), ": turn finished = ", turns)
 
