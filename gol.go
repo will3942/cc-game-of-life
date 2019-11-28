@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 //	"time"
-	//"sync"
+	"sync"
 	//"github.com/ChrisGora/semaphore"
 )
 
@@ -63,11 +63,7 @@ func createWorkers(p golParams, segments []segment, world [][]byte) []workerPara
 			seg: segments[i],
 			inputChan: make(chan uint8, numBytesInImage),
 			outputChan: make(chan uint8, numBytesInImage),
-			start: make(chan bool, 1),
-			done: make(chan bool, 1),
 		}
-
-		go golWorker(workers[i])
 	}
 
 	return workers
@@ -76,10 +72,6 @@ func createWorkers(p golParams, segments []segment, world [][]byte) []workerPara
 // Sends world to workers
 func sendWorldToWorkers(workers []workerParams, world [][]byte) {
 	// Send world to workers
-	for _, worker := range workers {
-		worker.start <- true
-	}
-
 	for y := range world {
 		for _, b := range world[y] {
 			for _, worker := range workers {
@@ -196,11 +188,17 @@ func distributor(p golParams, d distributorChans, alive chan []cell) {
 		// Create workers array
 		//fmt.Println(time.Now(), ": turn started = ", turns)
 
+		var wg sync.WaitGroup
+
+		wg.Add(len(workers))
+
 		sendWorldToWorkers(workers, dState.world)
 
 		for _, worker := range workers {
-			<-worker.done
+			go golWorker(worker, &wg)
 		}
+
+		wg.Wait()
 
 		//fmt.Println(time.Now(), ": turn construction started = ", turns)
 
