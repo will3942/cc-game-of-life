@@ -1,10 +1,10 @@
 package main
 
 import (
-	"fmt"
+//	"fmt"
 	"strconv"
 	"strings"
-	"time"
+//	"time"
 )
 
 // Return the life value of a neighbour
@@ -112,7 +112,7 @@ func distributor(p golParams, d distributorChans, alive chan []cell) {
 		for x := 0; x < p.imageWidth; x++ {
 			val := <-d.io.inputVal
 			if val != 0 {
-				fmt.Println("Alive cell at", x, y)
+				//fmt.Println("Alive cell at", x, y)
 				world[y][x] = val
 			}
 		}
@@ -120,7 +120,7 @@ func distributor(p golParams, d distributorChans, alive chan []cell) {
 
 	// Calculate the new state of Game of Life after the given number of turns.
 	for turns := 0; turns < p.turns; turns++ {
-		fmt.Println(time.Now(), ": turn started = ", turns)
+		//fmt.Println(time.Now(), ": turn started = ", turns)
 
 		newWorld := createNewWorld(p.imageWidth, p.imageHeight)
 
@@ -130,7 +130,7 @@ func distributor(p golParams, d distributorChans, alive chan []cell) {
 			}
 		}
 
-		fmt.Println(time.Now(), ": turn finished = ", turns)
+		//fmt.Println(time.Now(), ": turn finished = ", turns)
 
 		world = newWorld
 	}
@@ -145,6 +145,9 @@ func distributor(p golParams, d distributorChans, alive chan []cell) {
 			}
 		}
 	}
+
+	// Output final pgm image
+	writeOutputImage(p, d, p.turns, world)
 
 	// Make sure that the Io has finished any output before exiting.
 	d.io.command <- ioCheckIdle
