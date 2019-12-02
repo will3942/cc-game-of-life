@@ -205,6 +205,9 @@ func distributor(p golParams, d distributorChans, alive chan []cell) {
 		// Get new state from workers
 		dState = getNewStateFromWorkers(world, workers)
 
+		// Send number of alive cells to ticker
+		d.numAliveCells <- len(dState.aliveCells)
+
 		//fmt.Println(time.Now(), ": turn finished = ", turns)
 
 		select {
@@ -214,6 +217,9 @@ func distributor(p golParams, d distributorChans, alive chan []cell) {
         // Receiving would block if no key press occurred
     }
 	}
+
+	// Output final PGM image
+	writeOutputImage(p, d, p.turns, dState.world)
 
 	// Make sure that the Io has finished any output before exiting.
 	d.io.command <- ioCheckIdle

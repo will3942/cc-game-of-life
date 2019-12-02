@@ -48,6 +48,9 @@ func handleKeyPress(p golParams, d distributorChans, keyPressed rune, currentTur
 	case 112:
 		// p pressed: pause processing until p pressed again
 		paused := true
+
+		// Pause ticker thread
+		d.tickerPause <- paused
 		
 		fmt.Println("Current turn is ", currentTurn);
 		
@@ -56,6 +59,10 @@ func handleKeyPress(p golParams, d distributorChans, keyPressed rune, currentTur
 
 			if (keyPress == 112) {
 				paused = false
+
+				// Resume ticker thread
+				d.tickerPause <- paused
+
 				fmt.Println("Continuing...");
 			} else {
 				handleKeyPress(p, d, keyPress, currentTurn, world)

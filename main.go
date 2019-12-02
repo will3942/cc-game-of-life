@@ -55,6 +55,8 @@ type ioToDistributor struct {
 type distributorChans struct {
 	io distributorToIo
 	keyChan <-chan rune
+	numAliveCells chan<- int
+	tickerPause chan<- bool
 }
 
 // ioChans stores all the chans that the io goroutine will use.
@@ -69,6 +71,7 @@ type ioChans struct {
 func gameOfLife(p golParams, keyChan <-chan rune) []cell {
 	var dChans distributorChans
 	var ioChans ioChans
+	var tChans tickerChans
 
 	ioCommand := make(chan ioCommand)
 	dChans.io.command = ioCommand
@@ -92,12 +95,31 @@ func gameOfLife(p golParams, keyChan <-chan rune) []cell {
 
 	dChans.keyChan = keyChan
 
+	// Channel that receives the number of alive cells
+	numAliveCellsChan := make(chan int)
+	dChans.numAliveCells = numAliveCellsChan
+	tChans.numAliveCells = numAliveCellsChan
+
+	// Channel that stops the ticker thread
+	tickerStopChan := make(chan bool)
+	tChans.stop = tickerStopChan
+
+	// Channel that pauses the ticker thread
+	tickerPauseChan := make(chan bool)
+	tChans.pause = tickerPauseChan
+	dChans.tickerPause = tickerPauseChan
+
 	aliveCells := make(chan []cell)
 
 	go distributor(p, dChans, aliveCells)
 	go pgmIo(p, ioChans)
+	go ticker(p, tChans)
 
 	alive := <-aliveCells
+
+	// Stop the ticker thread
+	tickerStopChan <- true
+
 	return alive
 }
 
