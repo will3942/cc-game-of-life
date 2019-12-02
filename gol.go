@@ -38,9 +38,16 @@ func splitWorldIntoSegments(p golParams) []segment {
 	heightOfASegment := p.imageHeight / p.threads
 
 	for i := range segments {
+		sY := (i * heightOfASegment)
+		eY := sY + heightOfASegment
+
+		if (i == (p.threads - 1) && eY != p.imageHeight) {
+			eY = p.imageHeight
+		}
+
 		segments[i] = segment{
-			startY: (i * heightOfASegment),
-			endY:		(i * heightOfASegment) + heightOfASegment,
+			startY: sY,
+			endY:		eY,
 		}
 	}
 
