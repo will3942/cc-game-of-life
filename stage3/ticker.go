@@ -16,11 +16,11 @@ type tickerChans struct {
 func ticker(p golParams, tChans tickerChans,) {
   ticker := time.NewTicker(2 * time.Second)
 
-  isPaused := false
-  numAliveCells := 0
-
   // Handle receiving number of alive cells and printing in a goroutine
   go func() {
+    isPaused := false
+    numAliveCells := 0
+    
     for {
       select {
       case <-tChans.stop:
