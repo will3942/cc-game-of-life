@@ -51,3 +51,6 @@ Reasoning for speed decrease when parallelising:
 
 This is because chansend and chanrecv are blocking operations (as shown by a lot of time spent in runtime.lock, runtime.unlock, runtime.chanrecv and runtime.chansend in comparison to actual Game of Life operations). This is mostly affected due to the fact that a vast amount of data is sent on these channels as the world is communicated byte by byte with the workers and in reality there is a huge number of bytes to communicate (nBytes = height of world * width of world) in comparison to a relatively small world size. This causes a large amount of time to be spent in communicating the world in comparison to the actual calculations on the world and so a single-threaded implementation would be much faster unless the communication pattern is changed i.e just communicating the edges using a halo exchange scheme for example or using memory sharing of the world slice and not modifying it in the goroutines as memory sharing using slices is thread safe as long as it is not modified.
 
+Single threaded vs Concurrent Implementation:
+
+When utilising 2 workers vs just a single-threaded implementation we see a 313.5% ((2976777872-719892807)/719892807*100) increase in time to complete 1000 turns on a 128x128 image size. 
