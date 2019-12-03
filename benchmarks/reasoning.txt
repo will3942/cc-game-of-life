@@ -21,6 +21,21 @@ Showing top 10 nodes out of 21
      8.16s  2.95% 77.97%      8.16s  2.95%  uk.ac.bris.cs/gameoflife.getNeighbourLifeValue
      8.16s  2.95% 80.92%     63.27s 22.88%  uk.ac.bris.cs/gameoflife.getNewStateFromWorkers
      6.70s  2.42% 83.34%    115.06s 41.61%  runtime.chansend1
+(pprof) top --cum
+Showing nodes accounting for 198.15s, 71.65% of 276.55s total
+Dropped 204 nodes (cum <= 1.38s)
+Showing top 10 nodes out of 21
+      flat  flat%   sum%        cum   cum%
+     3.63s  1.31%  1.31%    154.35s 55.81%  uk.ac.bris.cs/gameoflife.golWorker
+         0     0%  1.31%    119.80s 43.32%  uk.ac.bris.cs/gameoflife.distributor
+     6.70s  2.42%  3.74%    115.06s 41.61%  runtime.chansend1
+     4.71s  1.70%  5.44%    113.35s 40.99%  runtime.chanrecv1
+    22.99s  8.31% 13.75%    108.64s 39.28%  runtime.chanrecv
+    20.16s  7.29% 21.04%    108.36s 39.18%  runtime.chansend
+    66.45s 24.03% 45.07%     66.75s 24.14%  runtime.lock
+     5.49s  1.99% 47.05%        64s 23.14%  uk.ac.bris.cs/gameoflife.getNewStateFromChan
+     8.16s  2.95% 50.01%     63.27s 22.88%  uk.ac.bris.cs/gameoflife.getNewStateFromWorkers
+    59.86s 21.65% 71.65%     59.87s 21.65%  runtime.unlock
 
 Stage 1a:
 
@@ -45,6 +60,21 @@ Showing top 10 nodes out of 34
      0.09s  0.76% 95.60%      0.10s  0.85%  runtime.runqgrab
      0.08s  0.68% 96.27%      0.08s  0.68%  runtime.(*randomEnum).next
      0.08s  0.68% 96.95%      0.36s  3.05%  runtime.findrunnable
+(pprof) top --cum 
+Showing nodes accounting for 10.80s, 91.45% of 11.81s total
+Dropped 71 nodes (cum <= 0.06s)
+Showing top 10 nodes out of 34
+      flat  flat%   sum%        cum   cum%
+     1.29s 10.92% 10.92%     10.89s 92.21%  uk.ac.bris.cs/gameoflife.distributor
+     0.91s  7.71% 18.63%      9.50s 80.44%  uk.ac.bris.cs/gameoflife.getNewLifeValue
+     4.34s 36.75% 55.38%      8.59s 72.73%  uk.ac.bris.cs/gameoflife.getNumLiveNeighbours
+     3.54s 29.97% 85.35%      3.54s 29.97%  uk.ac.bris.cs/gameoflife.getNeighbourLifeValue
+     0.71s  6.01% 91.36%      0.71s  6.01%  runtime.duffzero
+         0     0% 91.36%      0.43s  3.64%  uk.ac.bris.cs/gameoflife.pgmIo
+         0     0% 91.36%      0.40s  3.39%  runtime.mcall
+         0     0% 91.36%      0.40s  3.39%  uk.ac.bris.cs/gameoflife.writePgmImage
+     0.01s 0.085% 91.45%      0.39s  3.30%  runtime.park_m
+         0     0% 91.45%      0.38s  3.22%  runtime.schedule
 
 
 Reasoning for speed decrease when parallelising:
