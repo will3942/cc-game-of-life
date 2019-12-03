@@ -1,0 +1,53 @@
+Stage 3:
+
+[qv18211@it075638 stage3]$ go tool pprof cpu.prof 
+File: gameoflife.test
+Type: cpu
+Time: Dec 3, 2019 at 2:26pm (GMT)
+Duration: 2.65mins, Total samples = 4.61mins (174.25%)
+Entering interactive mode (type "help" for commands, "o" for options)
+(pprof) top10
+Showing nodes accounting for 230.48s, 83.34% of 276.55s total
+Dropped 204 nodes (cum <= 1.38s)
+Showing top 10 nodes out of 21
+      flat  flat%   sum%        cum   cum%
+    66.45s 24.03% 24.03%     66.75s 24.14%  runtime.lock
+    59.86s 21.65% 45.67%     59.87s 21.65%  runtime.unlock
+    22.99s  8.31% 53.99%    108.64s 39.28%  runtime.chanrecv
+    20.16s  7.29% 61.28%    108.36s 39.18%  runtime.chansend
+    14.88s  5.38% 66.66%     27.77s 10.04%  runtime.typedmemmove
+       13s  4.70% 71.36%        13s  4.70%  runtime.memmove
+    10.12s  3.66% 75.02%     19.34s  6.99%  uk.ac.bris.cs/gameoflife.getNumLiveNeighbours
+     8.16s  2.95% 77.97%      8.16s  2.95%  uk.ac.bris.cs/gameoflife.getNeighbourLifeValue
+     8.16s  2.95% 80.92%     63.27s 22.88%  uk.ac.bris.cs/gameoflife.getNewStateFromWorkers
+     6.70s  2.42% 83.34%    115.06s 41.61%  runtime.chansend1
+
+Stage 1a:
+
+[qv18211@it075638 cc-game-of-life]$ go tool pprof cpu.prof 
+File: gameoflife.test
+Type: cpu
+Time: Dec 3, 2019 at 2:23pm (GMT)
+Duration: 11.61s, Total samples = 11.81s (101.70%)
+Entering interactive mode (type "help" for commands, "o" for options)
+(pprof) top10
+Showing nodes accounting for 11.45s, 96.95% of 11.81s total
+Dropped 71 nodes (cum <= 0.06s)
+Showing top 10 nodes out of 34
+      flat  flat%   sum%        cum   cum%
+     4.34s 36.75% 36.75%      8.59s 72.73%  uk.ac.bris.cs/gameoflife.getNumLiveNeighbours
+     3.54s 29.97% 66.72%      3.54s 29.97%  uk.ac.bris.cs/gameoflife.getNeighbourLifeValue
+     1.29s 10.92% 77.65%     10.89s 92.21%  uk.ac.bris.cs/gameoflife.distributor
+     0.91s  7.71% 85.35%      9.50s 80.44%  uk.ac.bris.cs/gameoflife.getNewLifeValue
+     0.71s  6.01% 91.36%      0.71s  6.01%  runtime.duffzero
+     0.22s  1.86% 93.23%      0.22s  1.86%  runtime.futex
+     0.19s  1.61% 94.83%      0.21s  1.78%  syscall.Syscall
+     0.09s  0.76% 95.60%      0.10s  0.85%  runtime.runqgrab
+     0.08s  0.68% 96.27%      0.08s  0.68%  runtime.(*randomEnum).next
+     0.08s  0.68% 96.95%      0.36s  3.05%  runtime.findrunnable
+
+
+Reasoning for speed decrease when parallelising:
+
+This is because chansend and chanrecv are blocking operations (as shown by a lot of time spent in runtime.lock, runtime.unlock, runtime.chanrecv and runtime.chansend in comparison to actual Game of Life operations). This is mostly affected due to the fact that a vast amount of data is sent on these channels as the world is communicated byte by byte with the workers and in reality there is a huge number of bytes to communicate (nBytes = height of world * width of world) in comparison to a relatively small world size. This causes a large amount of time to be spent in communicating the world in comparison to the actual calculations on the world and so a single-threaded implementation would be much faster unless the communication pattern is changed i.e just communicating the edges using a halo exchange scheme for example or using memory sharing of the world slice and not modifying it in the goroutines as memory sharing using slices is thread safe as long as it is not modified.
+
